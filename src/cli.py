@@ -52,15 +52,48 @@ def format_table(predictions_df, top_n: int = 3) -> str:
     return table
 
 
-def display_predictions(predictions_df, top_n: int = 3, verbose: bool = False):
+def display_csv(predictions_df):
     """
-    Display predictions in formatted table.
+    Display predictions in CSV format.
+    
+    Args:
+        predictions_df: DataFrame with predictions (already sorted by probability)
+    """
+    # Ensure sorted by probability descending
+    predictions_df = predictions_df.sort_values('top3_probability', ascending=False).reset_index(drop=True)
+    
+    # Print CSV header
+    print("\nCSV Format (ordered by prediction probability):")
+    print("-" * 70)
+    print("Horse Number,Horse Name,Predicted Probability (Top 3)")
+    
+    # Print CSV rows
+    for _, row in predictions_df.iterrows():
+        horse_num = int(row['horse_number'])
+        horse_name = row['horse_name']
+        probability = f"{row['top3_probability']:.4f}"
+        print(f"{horse_num},{horse_name},{probability}")
+    
+    print("-" * 70)
+
+
+def display_predictions(predictions_df, top_n: int = 3, verbose: bool = False, csv_format: bool = False):
+    """
+    Display predictions in formatted table and/or CSV format.
     
     Args:
         predictions_df: DataFrame with predictions
-        top_n: Number of top predictions to display
+        top_n: Number of top predictions to display in table
         verbose: Whether to show additional information
+        csv_format: Whether to also display in CSV format
     """
+    # Ensure sorted by probability descending
+    predictions_df = predictions_df.sort_values('top3_probability', ascending=False).reset_index(drop=True)
+    
+    if csv_format:
+        # Display CSV format first
+        display_csv(predictions_df)
+    
     print("\n" + "=" * 70)
     print("MELBOURNE CUP TOP-3 PREDICTIONS")
     print("=" * 70)
@@ -131,6 +164,25 @@ Examples:
         help='Display full predictions table'
     )
     
+    parser.add_argument(
+        '--no-randomness',
+        action='store_true',
+        help='Disable random variation in predictions (use deterministic model output)'
+    )
+    
+    parser.add_argument(
+        '--randomness-factor',
+        type=float,
+        default=0.01,
+        help='Factor controlling randomness (0.0-1.0, default: 0.01 = 1% subtle variation)'
+    )
+    
+    parser.add_argument(
+        '--csv',
+        action='store_true',
+        help='Display predictions in CSV format'
+    )
+    
     args = parser.parse_args()
     
     try:
@@ -170,7 +222,7 @@ Examples:
         )
         
         # Display results
-        display_predictions(predictions, top_n=args.top_n, verbose=args.verbose)
+        display_predictions(predictions, top_n=args.top_n, verbose=args.verbose, csv_format=args.csv)
         
         print(f"\nResults saved to: {args.output}")
         

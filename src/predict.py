@@ -54,14 +54,14 @@ class PredictionEngine:
                 f"Model not found. Please train model first using train_models.py. Error: {e}"
             )
     
-    def predict(self, input_data: pd.DataFrame, add_randomness: bool = True, randomness_factor: float = 0.05) -> pd.DataFrame:
+    def predict(self, input_data: pd.DataFrame, add_randomness: bool = True, randomness_factor: float = 0.01) -> pd.DataFrame:
         """
         Make predictions on input data.
         
         Args:
             input_data: DataFrame with horse data (can be raw or preprocessed)
             add_randomness: Whether to add random variation to predictions
-            randomness_factor: Factor controlling randomness (0.0-1.0, default 0.05 = 5%)
+            randomness_factor: Factor controlling randomness (0.0-1.0, default 0.01 = 1% subtle variation)
             
         Returns:
             DataFrame with predictions including horse number, name, and top-3 probability
@@ -87,19 +87,24 @@ class PredictionEngine:
         X = processed_data[available_cols]
         top3_probs = self.model.predict_proba_top3(X)
         
-        # Add randomness for fun if requested
+        # Add subtle randomness for fun if requested
         if add_randomness:
             np.random.seed(None)  # Use current time as seed for randomness
-            # Add random noise proportional to the randomness factor
-            noise = np.random.normal(0, randomness_factor * top3_probs.mean(), size=len(top3_probs))
+            # Add subtle random noise (much smaller - scale by std instead of mean)
+            noise_std = randomness_factor * top3_probs.std()  # Scale by actual std
+            noise = np.random.normal(0, noise_std, size=len(top3_probs))
             top3_probs = top3_probs + noise
             
             # Ensure probabilities stay in valid range [0, 1]
             top3_probs = np.clip(top3_probs, 0.01, 0.99)
             
-            # Renormalize so they sum to approximately 3 (for top-3)
-            # This maintains the interpretation while adding variation
-            top3_probs = top3_probs * (3.0 / top3_probs.sum())
+            # Subtle renormalization - keep it close to original
+            original_sum = top3_probs.sum()
+            if original_sum > 0:
+                # Only adjust slightly (max 5% change)
+                target_sum = len(top3_probs) * top3_probs.mean()  # Maintain average
+                adjustment_factor = min(1.05, max(0.95, target_sum / original_sum))
+                top3_probs = top3_probs * adjustment_factor
         
         # Create results DataFrame
         results = pd.DataFrame({
@@ -156,7 +161,7 @@ def predict_melbourne_cup(input_path: Optional[str] = None,
                          model_dir: str = "models",
                          output_path: Optional[str] = None,
                          add_randomness: bool = True,
-                         randomness_factor: float = 0.05) -> pd.DataFrame:
+                         randomness_factor: float = 0.01) -> pd.DataFrame:
     """
     Main prediction function for Melbourne Cup.
     
@@ -183,6 +188,8 @@ def predict_melbourne_cup(input_path: Optional[str] = None,
     # Save results if output path specified
     if output_path:
         os.makedirs(os.path.dirname(output_path) if os.path.dirname(output_path) else '.', exist_ok=True)
+        # Ensure sorted by probability descending before saving
+        predictions = predictions.sort_values('top3_probability', ascending=False).reset_index(drop=True)
         predictions.to_csv(output_path, index=False)
         print(f"\nPredictions saved to {output_path}")
     
