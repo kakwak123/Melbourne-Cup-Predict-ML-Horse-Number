@@ -252,39 +252,78 @@ class DataPreprocessor:
                     lambda x: json.loads(x) if isinstance(x, str) else x
                 )
         
-        # Calculate derived features
-        df['career_starts'] = df.get('wins', 0) + df.get('places', 0) + np.random.randint(0, 20)
-        df['win_rate'] = df['wins'] / (df['career_starts'] + 1)
-        df['place_rate'] = df['places'] / (df['career_starts'] + 1)
-        
-        # Extract recent race time statistics
-        if 'recent_race_times' in df.columns:
-            df['avg_recent_time'] = df['recent_race_times'].apply(
-                lambda x: np.mean(x) if isinstance(x, list) and len(x) > 0 else np.nan
-            )
-            df['best_recent_time'] = df['recent_race_times'].apply(
-                lambda x: np.min(x) if isinstance(x, list) and len(x) > 0 else np.nan
-            )
-            df['num_recent_races'] = df['recent_race_times'].apply(
-                lambda x: len(x) if isinstance(x, list) else 0
-            )
+        # Odds-based feature engineering
+        if 'odds' in df.columns:
+            df['odds'] = pd.to_numeric(df['odds'], errors='coerce')
+            
+            # Convert odds to implied probability (probability of winning)
+            # Odds format: $8.00 means 8:1, so probability = 1/(odds+1)
+            df['odds_probability'] = 1.0 / (df['odds'] + 1.0)
+            df['odds_probability'].fillna(df['odds_probability'].median(), inplace=True)
+            
+            # Log odds (often more predictive)
+            df['log_odds'] = np.log(df['odds'] + 1.0)
+            df['log_odds'].fillna(df['log_odds'].median(), inplace=True)
+            
+            # Odds rank (lower odds = higher rank = better horse)
+            df['odds_rank'] = df['odds'].rank(ascending=True)
+            
+            # Normalized odds (0-1 scale, lower is better)
+            if df['odds'].max() > df['odds'].min():
+                df['odds_normalized'] = 1.0 - (df['odds'] - df['odds'].min()) / (df['odds'].max() - df['odds'].min())
+            else:
+                df['odds_normalized'] = 0.5
         else:
-            df['avg_recent_time'] = np.nan
-            df['best_recent_time'] = np.nan
-            df['num_recent_races'] = 0
+            df['odds_probability'] = 0.1  # Default
+            df['log_odds'] = np.log(10)
+            df['odds_rank'] = 12.5  # Middle rank
+            df['odds_normalized'] = 0.5
         
-        # Handle missing values in numerical columns
-        numerical_cols = ['age', 'weight', 'barrier', 'wins', 'places', 'odds',
-                         'career_starts', 'win_rate', 'place_rate', 
-                         'avg_recent_time', 'best_recent_time']
+        # Weight-based features
+        if 'weight' in df.columns:
+            df['weight'] = pd.to_numeric(df['weight'], errors='coerce')
+            
+            # Weight advantage (lighter is better for long distance)
+            # Normalize weight (lower is better)
+            if df['weight'].max() > df['weight'].min():
+                df['weight_normalized'] = 1.0 - (df['weight'] - df['weight'].min()) / (df['weight'].max() - df['weight'].min())
+            else:
+                df['weight_normalized'] = 0.5
+            
+            # Weight rank (lighter = higher rank)
+            df['weight_rank'] = df['weight'].rank(ascending=True)
+        
+        # Barrier-based features
+        if 'barrier' in df.columns:
+            df['barrier'] = pd.to_numeric(df['barrier'], errors='coerce')
+            
+            # Barrier preference (middle barriers often preferred, extremes less so)
+            # Create a bell curve preference: prefer barriers 6-18
+            df['barrier_preference'] = np.exp(-((df['barrier'] - 12) ** 2) / (2 * 5 ** 2))
+            
+            # Barrier rank (lower barrier number = higher rank, but not always better)
+            df['barrier_rank'] = df['barrier'].rank(ascending=True)
+        
+        # Handle missing values in key numerical columns
+        numerical_cols = ['horse_number', 'age', 'weight', 'barrier', 'odds']
         
         for col in numerical_cols:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce')
                 df[col].fillna(df[col].median(), inplace=True)
         
+        # Ensure all engineered features have no NaN values
+        engineered_features = ['odds_probability', 'log_odds', 'odds_rank', 'odds_normalized',
+                             'weight_normalized', 'weight_rank', 'barrier_preference', 'barrier_rank']
+        
+        for col in engineered_features:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors='coerce')
+                if df[col].isna().any():
+                    df[col].fillna(df[col].median(), inplace=True)
+        
         # Ensure categorical columns are strings
-        categorical_cols = ['trainer', 'jockey', 'track_condition', 'horse_name']
+        categorical_cols = ['trainer', 'jockey', 'horse_name']
         for col in categorical_cols:
             if col in df.columns:
                 df[col] = df[col].astype(str)
@@ -306,7 +345,7 @@ class DataPreprocessor:
         df = df.copy()
         
         # Label encode categorical variables
-        categorical_cols = ['trainer', 'jockey', 'track_condition']
+        categorical_cols = ['trainer', 'jockey', 'horse_name']
         
         for col in categorical_cols:
             if col in df.columns:
@@ -344,20 +383,78 @@ class DataPreprocessor:
         """
         df = df.copy()
         
-        # Select numerical features
+        # Select numerical features - enhanced with engineered features
         numerical_features = [
-            'age', 'weight', 'barrier', 'wins', 'places', 'odds',
-            'career_starts', 'win_rate', 'place_rate',
-            'avg_recent_time', 'best_recent_time', 'num_recent_races'
+            # Original features
+            'age',                    # Age
+            'weight',                 # Weight
+            'barrier',                # Barrier position
+            'odds',                   # Starting price/odds
+            
+            # Odds-based engineered features
+            'odds_probability',       # Implied probability from odds
+            'log_odds',               # Log of odds (often more predictive)
+            'odds_rank',              # Rank based on odds
+            'odds_normalized',        # Normalized odds (0-1, lower is better)
+            
+            # Weight-based engineered features
+            'weight_normalized',     # Normalized weight (0-1, lower is better)
+            'weight_rank',            # Rank based on weight
+            
+            # Barrier-based engineered features
+            'barrier_preference',     # Barrier preference score (bell curve)
+            'barrier_rank'            # Rank based on barrier
         ]
         
+        # Handle margin if available (for historical data, not predictions)
+        if 'margin' in df.columns:
+            # Convert margin to numeric (e.g., "0.5L" -> 0.5)
+            df['margin_numeric'] = df['margin'].apply(
+                lambda x: float(str(x).replace('L', '').replace('–', '0').replace('-', '0')) 
+                if pd.notna(x) and str(x) != '' else 0.0
+            )
+            numerical_features.append('margin_numeric')
+        elif 'margin_numeric' not in df.columns and not fit:
+            # For prediction data, add margin_numeric as 0 (not available before race)
+            df['margin_numeric'] = 0.0
+            if 'margin_numeric' in self.feature_columns:
+                numerical_features.append('margin_numeric')
+        
         # Add encoded categorical features
-        encoded_features = ['trainer_encoded', 'jockey_encoded', 'track_condition_encoded']
+        encoded_features = ['trainer_encoded', 'jockey_encoded']
+        
+        # Also encode horse_name if needed (as a feature)
+        if 'horse_name_encoded' in df.columns:
+            encoded_features.append('horse_name_encoded')
         
         feature_cols = [col for col in numerical_features + encoded_features if col in df.columns]
         
+        # Ensure all required features are present (for prediction)
+        if not fit and self.feature_columns is not None:
+            for col in self.feature_columns:
+                if col not in df.columns:
+                    if col == 'margin_numeric':
+                        df[col] = 0.0
+                    elif col.endswith('_rank'):
+                        # For rank features, use median rank
+                        df[col] = 12.5  # Middle rank for 24 horses
+                    elif col.endswith('_normalized'):
+                        df[col] = 0.5  # Middle value
+                    elif col == 'odds_probability':
+                        df[col] = 0.1  # Default probability
+                    elif col == 'log_odds':
+                        df[col] = np.log(10)  # Default log odds
+                    elif col == 'barrier_preference':
+                        df[col] = 0.5  # Default preference
+                    else:
+                        df[col] = 0.0  # Default value for missing features
+            # Use the exact feature columns from training
+            feature_cols = [col for col in self.feature_columns if col in df.columns]
+        
         if fit:
             self.feature_columns = feature_cols
+            # Use RobustScaler-like approach: scale to median and IQR for better handling of outliers
+            # But we'll use StandardScaler with better handling
             df_scaled = pd.DataFrame(
                 self.scaler.fit_transform(df[feature_cols]),
                 columns=feature_cols,
@@ -367,6 +464,10 @@ class DataPreprocessor:
         else:
             if not self.is_fitted:
                 raise ValueError("Scaler must be fitted before transform. Call with fit=True first.")
+            # Ensure all features exist before scaling
+            missing_cols = [col for col in feature_cols if col not in df.columns]
+            if missing_cols:
+                raise ValueError(f"Missing required features: {missing_cols}")
             df_scaled = pd.DataFrame(
                 self.scaler.transform(df[feature_cols]),
                 columns=feature_cols,
@@ -400,7 +501,10 @@ class DataPreprocessor:
         os.makedirs(os.path.dirname(self.scaler_path), exist_ok=True)
         joblib.dump(self.scaler, self.scaler_path)
         joblib.dump(self.label_encoders, self.encoder_path)
-        print(f"Preprocessors saved to {self.scaler_path} and {self.encoder_path}")
+        # Save feature columns
+        feature_cols_path = os.path.join(os.path.dirname(self.scaler_path), "feature_columns.pkl")
+        joblib.dump(self.feature_columns, feature_cols_path)
+        print(f"Preprocessors saved to {self.scaler_path}, {self.encoder_path}, and {feature_cols_path}")
     
     def load_preprocessors(self):
         """Load scaler and encoders from disk."""
@@ -408,6 +512,12 @@ class DataPreprocessor:
             self.scaler = joblib.load(self.scaler_path)
             self.label_encoders = joblib.load(self.encoder_path)
             self.is_fitted = True
+            # Load feature columns
+            feature_cols_path = os.path.join(os.path.dirname(self.scaler_path), "feature_columns.pkl")
+            if os.path.exists(feature_cols_path):
+                self.feature_columns = joblib.load(feature_cols_path)
+            else:
+                print("Warning: Feature columns file not found. Will try to infer from data.")
             print(f"Preprocessors loaded from {self.scaler_path} and {self.encoder_path}")
         else:
             raise FileNotFoundError("Preprocessors not found. Train models first.")

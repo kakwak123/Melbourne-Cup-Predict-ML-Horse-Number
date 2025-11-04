@@ -1,111 +1,67 @@
 """
-Prediction module for Melbourne Cup top-3 finishers.
+Simplified prediction module for Melbourne Cup top-3 finishers.
 
 This module handles:
-- Loading trained models
+- Loading trained model
 - Preprocessing input data
-- Running ensemble predictions
-- Converting finishing positions to top-3 probabilities
+- Running predictions
 - Outputting predictions in required format
 """
 
 import os
 import numpy as np
 import pandas as pd
-from typing import Optional, Tuple, Dict
+from typing import Optional
 import warnings
 
 from data_fetch import prepare_prediction_data, DataFetcher, DataPreprocessor
-from train_models import XGBoostModel, LSTMModel
+from train_models import SimpleModel
 
 warnings.filterwarnings('ignore')
 
 
 class PredictionEngine:
-    """Main prediction engine combining XGBoost and LSTM models."""
+    """Simple prediction engine using Logistic Regression."""
     
-    def __init__(self, model_dir: str = "models", xgb_weight: float = 0.6):
+    def __init__(self, model_dir: str = "models"):
         """
         Initialize prediction engine.
         
         Args:
             model_dir: Directory containing saved models
-            xgb_weight: Weight for XGBoost in ensemble (LSTM weight = 1 - xgb_weight)
         """
         self.model_dir = model_dir
-        self.xgb_weight = xgb_weight
-        self.lstm_weight = 1.0 - xgb_weight
-        
-        self.xgb_model = None
-        self.lstm_model = None
+        self.model = None
         self.preprocessor = None
         
         self._load_models()
     
     def _load_models(self):
-        """Load trained models and preprocessors."""
+        """Load trained model and preprocessors."""
         try:
             # Load preprocessors
             self.preprocessor = DataPreprocessor()
             self.preprocessor.load_preprocessors()
             
-            # Load XGBoost model
-            xgb_path = os.path.join(self.model_dir, "xgboost_model.pkl")
-            self.xgb_model = XGBoostModel(xgb_path)
-            self.xgb_model.load()
+            # Load model
+            model_path = os.path.join(self.model_dir, "logistic_model.pkl")
+            self.model = SimpleModel(model_path)
+            self.model.load()
             
-            # Load LSTM model
-            lstm_path = os.path.join(self.model_dir, "lstm_model.keras")
-            self.lstm_model = LSTMModel(lstm_path)
-            self.lstm_model.load()
-            
-            print("Models loaded successfully.")
+            print("Model loaded successfully.")
         except FileNotFoundError as e:
             raise FileNotFoundError(
-                f"Models not found. Please train models first using train_models.py. Error: {e}"
+                f"Model not found. Please train model first using train_models.py. Error: {e}"
             )
     
-    def _convert_to_top3_probabilities(self, positions: np.ndarray) -> np.ndarray:
-        """
-        Convert finishing positions to top-3 probabilities.
-        
-        Uses a softmax-like transformation where lower positions (better finishes)
-        have higher probabilities.
-        
-        Args:
-            positions: Predicted finishing positions
-            
-        Returns:
-            Array of top-3 probabilities
-        """
-        # Convert positions to scores (lower position = higher score)
-        # Add small epsilon to avoid division by zero
-        scores = 1.0 / (positions + 0.1)
-        
-        # Apply softmax to get probabilities
-        exp_scores = np.exp(scores - np.max(scores))  # Numerical stability
-        probabilities = exp_scores / np.sum(exp_scores)
-        
-        # Scale to top-3 probability (sum of top 3 probabilities)
-        # Get top 3 indices
-        top3_indices = np.argsort(positions)[:3]
-        
-        # Create binary indicator for top 3
-        top3_indicator = np.zeros_like(probabilities)
-        top3_indicator[top3_indices] = 1
-        
-        # Calculate probability as sum of top 3 individual probabilities
-        top3_probs = probabilities * top3_indicator
-        top3_probs = top3_probs / np.sum(top3_probs) * np.sum(probabilities[top3_indices])
-        
-        return top3_probs
-    
-    def predict(self, input_data: pd.DataFrame) -> pd.DataFrame:
+    def predict(self, input_data: pd.DataFrame, add_randomness: bool = True, randomness_factor: float = 0.05) -> pd.DataFrame:
         """
         Make predictions on input data.
         
         Args:
             input_data: DataFrame with horse data (can be raw or preprocessed)
+            add_randomness: Whether to add random variation to predictions
+            randomness_factor: Factor controlling randomness (0.0-1.0, default 0.05 = 5%)
             
         Returns:
             DataFrame with predictions including horse number, name, and top-3 probability
@@ -118,52 +74,38 @@ class PredictionEngine:
         
         # Get feature columns
         feature_cols = self.preprocessor.feature_columns
+        if feature_cols is None:
+            raise ValueError("Feature columns not set. Preprocessor may not have been fitted.")
         
-        # XGBoost prediction
-        X_xgb = processed_data[feature_cols]
-        xgb_predictions = self.xgb_model.predict(X_xgb)
+        # Filter to only columns that exist
+        available_cols = [col for col in feature_cols if col in processed_data.columns]
+        if len(available_cols) != len(feature_cols):
+            missing = set(feature_cols) - set(available_cols)
+            print(f"Warning: Missing columns: {missing}")
         
-        # LSTM prediction (requires sequences)
-        # For single race prediction, we'll use average features as sequence
-        # This is a simplified approach - ideally we'd have historical sequences per horse
-        try:
-            # Create sequences from current data
-            # Repeat each horse's features to create a sequence
-            sequence_length = self.lstm_model.sequence_length
-            X_lstm = []
+        # Make predictions
+        X = processed_data[available_cols]
+        top3_probs = self.model.predict_proba_top3(X)
+        
+        # Add randomness for fun if requested
+        if add_randomness:
+            np.random.seed(None)  # Use current time as seed for randomness
+            # Add random noise proportional to the randomness factor
+            noise = np.random.normal(0, randomness_factor * top3_probs.mean(), size=len(top3_probs))
+            top3_probs = top3_probs + noise
             
-            for idx in range(len(processed_data)):
-                horse_features = processed_data.iloc[idx][feature_cols].values
-                # Create sequence by repeating features
-                sequence = np.tile(horse_features, (sequence_length, 1))
-                X_lstm.append(sequence)
+            # Ensure probabilities stay in valid range [0, 1]
+            top3_probs = np.clip(top3_probs, 0.01, 0.99)
             
-            X_lstm = np.array(X_lstm)
-            lstm_predictions = self.lstm_model.predict(X_lstm)
-        except Exception as e:
-            print(f"Warning: LSTM prediction failed ({e}). Using XGBoost only.")
-            lstm_predictions = xgb_predictions.copy()
-            # Adjust weights to use only XGBoost
-            self.xgb_weight = 1.0
-            self.lstm_weight = 0.0
-        
-        # Ensemble prediction (weighted average)
-        ensemble_predictions = (
-            self.xgb_weight * xgb_predictions +
-            self.lstm_weight * lstm_predictions
-        )
-        
-        # Convert to top-3 probabilities
-        top3_probs = self._convert_to_top3_probabilities(ensemble_predictions)
+            # Renormalize so they sum to approximately 3 (for top-3)
+            # This maintains the interpretation while adding variation
+            top3_probs = top3_probs * (3.0 / top3_probs.sum())
         
         # Create results DataFrame
         results = pd.DataFrame({
             'horse_number': input_data['horse_number'].values,
             'horse_name': input_data['horse_name'].values,
-            'predicted_position': ensemble_predictions,
-            'top3_probability': top3_probs,
-            'xgb_prediction': xgb_predictions,
-            'lstm_prediction': lstm_predictions
+            'top3_probability': top3_probs
         })
         
         # Sort by top-3 probability descending
@@ -171,17 +113,18 @@ class PredictionEngine:
         
         return results
     
-    def predict_top3(self, input_data: pd.DataFrame) -> pd.DataFrame:
+    def predict_top3(self, input_data: pd.DataFrame, add_randomness: bool = True) -> pd.DataFrame:
         """
         Predict top 3 finishers with probabilities.
         
         Args:
             input_data: DataFrame with horse data
+            add_randomness: Whether to add random variation to predictions
             
         Returns:
             DataFrame with top 3 predictions
         """
-        predictions = self.predict(input_data)
+        predictions = self.predict(input_data, add_randomness=add_randomness)
         return predictions.head(3)[['horse_number', 'horse_name', 'top3_probability']]
 
 
@@ -211,7 +154,9 @@ def load_input_data(input_path: Optional[str] = None, year: Optional[int] = None
 def predict_melbourne_cup(input_path: Optional[str] = None, 
                          year: Optional[int] = None,
                          model_dir: str = "models",
-                         output_path: Optional[str] = None) -> pd.DataFrame:
+                         output_path: Optional[str] = None,
+                         add_randomness: bool = True,
+                         randomness_factor: float = 0.05) -> pd.DataFrame:
     """
     Main prediction function for Melbourne Cup.
     
@@ -220,6 +165,8 @@ def predict_melbourne_cup(input_path: Optional[str] = None,
         year: Year of Melbourne Cup (optional)
         model_dir: Directory containing trained models
         output_path: Path to save results (optional)
+        add_randomness: Whether to add random variation to predictions
+        randomness_factor: Factor controlling randomness (0.0-1.0)
         
     Returns:
         DataFrame with predictions
@@ -231,7 +178,7 @@ def predict_melbourne_cup(input_path: Optional[str] = None,
     engine = PredictionEngine(model_dir=model_dir)
     
     # Make predictions
-    predictions = engine.predict(input_data)
+    predictions = engine.predict(input_data, add_randomness=add_randomness, randomness_factor=randomness_factor)
     
     # Save results if output path specified
     if output_path:
@@ -263,4 +210,3 @@ if __name__ == "__main__":
     
     print("\nPredictions:")
     print(predictions[['horse_number', 'horse_name', 'top3_probability']].head(10))
-

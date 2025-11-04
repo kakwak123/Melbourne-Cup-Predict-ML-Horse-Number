@@ -15,6 +15,7 @@ from typing import Optional
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from predict import predict_melbourne_cup, PredictionEngine, load_input_data
+import os
 
 
 def format_table(predictions_df, top_n: int = 3) -> str:
@@ -71,8 +72,7 @@ def display_predictions(predictions_df, top_n: int = 3, verbose: bool = False):
         print("\n" + "-" * 70)
         print("Full Predictions:")
         print("-" * 70)
-        print(predictions_df[['horse_number', 'horse_name', 'top3_probability', 
-                             'predicted_position']].to_string(index=False))
+        print(predictions_df[['horse_number', 'horse_name', 'top3_probability']].to_string(index=False))
     
     print("\n" + "=" * 70)
 
@@ -134,13 +134,9 @@ Examples:
     args = parser.parse_args()
     
     try:
-        # Check if models exist
-        model_paths = [
-            os.path.join(args.model_dir, "xgboost_model.pkl"),
-            os.path.join(args.model_dir, "lstm_model.keras")
-        ]
-        
-        models_exist = all(os.path.exists(path) for path in model_paths)
+        # Check if model exists
+        model_path = os.path.join(args.model_dir, "logistic_model.pkl")
+        models_exist = os.path.exists(model_path)
         
         if not models_exist:
             print("Warning: Trained models not found.")
@@ -168,7 +164,9 @@ Examples:
             input_path=args.input,
             year=args.year,
             model_dir=args.model_dir,
-            output_path=args.output
+            output_path=args.output,
+            add_randomness=not args.no_randomness,
+            randomness_factor=args.randomness_factor
         )
         
         # Display results
