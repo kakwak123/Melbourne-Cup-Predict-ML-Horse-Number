@@ -59,11 +59,14 @@ class SimpleModel:
         # Convert to binary classification: top-3 (1) vs not top-3 (0)
         y_train_binary = (y_train <= 3).astype(int)
         
-        # Hyperparameter grid - favor L2 and higher C to keep features
+        # Hyperparameter grid - favor L2 and higher C to allow stronger feature weights
+        # Higher C values allow the model to weight odds more heavily (favorites win more!)
+        # Use 'roc_auc' scoring to better handle imbalanced data
         param_grid = {
-            'C': [1.0, 10.0, 100.0],  # Higher C = less regularization
+            'C': [100.0, 200.0, 500.0, 1000.0],  # Very high C = minimal regularization = strong odds weighting
             'penalty': ['l2'],  # L2 keeps all features (ridge)
-            'solver': ['lbfgs', 'liblinear']
+            'solver': ['lbfgs', 'liblinear'],
+            'class_weight': ['balanced', None]  # Handle class imbalance
         }
         
         # Base model
@@ -76,7 +79,7 @@ class SimpleModel:
                 base_model,
                 param_grid,
                 cv=3,
-                scoring='accuracy',
+                scoring='roc_auc',  # Better for imbalanced data than accuracy
                 n_jobs=-1,
                 verbose=1
             )
@@ -84,19 +87,22 @@ class SimpleModel:
             self.model = grid_search.best_estimator_
             self.best_params = grid_search.best_params_
         else:
-            # Use default parameters with L2 regularization
+            # Use default parameters with L2 regularization - higher C for stronger odds weighting
+            # Use class_weight='balanced' to handle imbalanced data
             self.model = LogisticRegression(
-                C=10.0,  # Higher C to keep more features
+                C=200.0,  # Higher C to allow stronger feature weights (especially for odds)
                 penalty='l2',  # L2 regularization keeps all features
                 solver='lbfgs',
+                class_weight='balanced',  # Handle class imbalance (only ~13% are top-3)
                 random_state=42,
                 max_iter=2000  # More iterations for convergence
             )
             self.model.fit(X_train, y_train_binary)
             self.best_params = {
-                'C': 10.0,
+                'C': 200.0,
                 'penalty': 'l2',
-                'solver': 'lbfgs'
+                'solver': 'lbfgs',
+                'class_weight': 'balanced'
             }
         
         print(f"Best parameters: {self.best_params}")
