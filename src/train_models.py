@@ -59,11 +59,11 @@ class SimpleModel:
         # Convert to binary classification: top-3 (1) vs not top-3 (0)
         y_train_binary = (y_train <= 3).astype(int)
         
-        # Hyperparameter grid
+        # Hyperparameter grid - favor L2 and higher C to keep features
         param_grid = {
-            'C': [0.1, 1.0, 10.0, 100.0],
-            'penalty': ['l1', 'l2'],
-            'solver': ['liblinear', 'saga']
+            'C': [1.0, 10.0, 100.0],  # Higher C = less regularization
+            'penalty': ['l2'],  # L2 keeps all features (ridge)
+            'solver': ['lbfgs', 'liblinear']
         }
         
         # Base model
@@ -84,19 +84,19 @@ class SimpleModel:
             self.model = grid_search.best_estimator_
             self.best_params = grid_search.best_params_
         else:
-            # Use default parameters
+            # Use default parameters with L2 regularization
             self.model = LogisticRegression(
-                C=1.0,
-                penalty='l2',
-                solver='liblinear',
+                C=10.0,  # Higher C to keep more features
+                penalty='l2',  # L2 regularization keeps all features
+                solver='lbfgs',
                 random_state=42,
-                max_iter=1000
+                max_iter=2000  # More iterations for convergence
             )
             self.model.fit(X_train, y_train_binary)
             self.best_params = {
-                'C': 1.0,
+                'C': 10.0,
                 'penalty': 'l2',
-                'solver': 'liblinear'
+                'solver': 'lbfgs'
             }
         
         print(f"Best parameters: {self.best_params}")

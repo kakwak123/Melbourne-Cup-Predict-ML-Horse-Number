@@ -383,27 +383,23 @@ class DataPreprocessor:
         """
         df = df.copy()
         
-        # Select numerical features - enhanced with engineered features
+        # Select numerical features - use features that work together
+        # Remove redundant/conflicting features
         numerical_features = [
-            # Original features
+            # Core features
             'age',                    # Age
-            'weight',                 # Weight
+            'weight',                 # Weight (raw - lighter is better)
             'barrier',                # Barrier position
-            'odds',                   # Starting price/odds
             
-            # Odds-based engineered features
-            'odds_probability',       # Implied probability from odds
-            'log_odds',               # Log of odds (often more predictive)
-            'odds_rank',              # Rank based on odds
-            'odds_normalized',        # Normalized odds (0-1, lower is better)
+            # Odds features - use normalized version (higher = better)
+            'odds_normalized',        # Normalized odds (0-1, higher is better for favorites)
+            'odds_probability',       # Implied probability from odds (higher = better)
             
-            # Weight-based engineered features
-            'weight_normalized',     # Normalized weight (0-1, lower is better)
-            'weight_rank',            # Rank based on weight
+            # Weight feature - normalized (higher = lighter = better)
+            'weight_normalized',      # Normalized weight (0-1, higher = lighter = better)
             
-            # Barrier-based engineered features
-            'barrier_preference',     # Barrier preference score (bell curve)
-            'barrier_rank'            # Rank based on barrier
+            # Barrier feature
+            'barrier_preference',     # Barrier preference score (bell curve, higher = better position)
         ]
         
         # Handle margin if available (for historical data, not predictions)
