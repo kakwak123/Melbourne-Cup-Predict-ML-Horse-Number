@@ -112,6 +112,18 @@ python src/cli.py
 - `--output`: Path to save results CSV
 - `--model-dir`: Directory containing trained models
 
+## Getting Data
+
+The system has three ways to get data:
+
+1. **Mock Data (Automatic)**: The system generates mock data automatically if no historical data is found. You can start training immediately!
+
+2. **Manual Preparation**: Place CSV files in `data/historical/` named `melbourne_cup_YYYY.csv` (see `DATA_GUIDE.md` for format details)
+
+3. **Generate Sample Data**: Run `python generate_sample_data.py` to create sample files
+
+See `DATA_GUIDE.md` for detailed instructions on data sources, formats, and preparation.
+
 ## Input Data Format
 
 The input CSV/JSON should contain the following columns:
