@@ -1326,9 +1326,9 @@ The tag must exist before the 3:00pm AEDT start on Tuesday 3 November. After the
 
 - [ ] README's first section lists the current pipeline: verified data, Plackett-Luce, Betfair market baseline, leave-one-year-out evaluation, frozen predictions; and the exact commands `python -m pytest`, `python scripts/fetch_cup_bsp.py`, `python -m src.evaluate`, `python -m src.predict_cup <lineup.csv>`.
 - [ ] README no longer claims an XGBoost/LSTM ensemble or "0.6/0.4" weights as the current model; a "Legacy" section names the old modules and says they were trained partly on synthetic data and tuned on 2025 results.
-- [ ] Each legacy module's docstring starts with `LEGACY:`; `python -m pytest` still passes.
+- [ ] Each legacy module's docstring opens with `"""LEGACY:`; `python -m pytest` still passes.
 
-**Verify:** `grep -l "^LEGACY:" src/*.py | wc -l` → `5`, and `python -m pytest -q` → all tests pass
+**Verify:** `grep -l '^"""LEGACY:' src/*.py | wc -l` → `5`, and `python -m pytest -q` → all tests pass
 
 **Steps:**
 
