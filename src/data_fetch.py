@@ -11,8 +11,6 @@ This module handles:
 import os
 import pandas as pd
 import numpy as np
-import requests
-from bs4 import BeautifulSoup
 from typing import Optional, Dict, List, Tuple
 import json
 import warnings
@@ -81,6 +79,11 @@ class DataFetcher:
             DataFrame or None if scrape fails
         """
         try:
+            # Imported lazily: scraping is rarely used, and these modules add
+            # ~0.2s to every CLI/training start-up when imported at module level.
+            import requests
+            from bs4 import BeautifulSoup
+
             headers = {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
             }
