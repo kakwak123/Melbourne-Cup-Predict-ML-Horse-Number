@@ -1381,6 +1381,334 @@ git commit -m "docs: mark legacy pipeline and document the new one"
 
 ---
 
+### Task 9: Strategy backtest on the Cup market data
+
+**Goal:** Replay six bet shapes ($100 each) on every Cup that has Betfair prices (2020-2025) under an exchange and a bookmaker price scenario, and report cost, return, years paid and where the placegetters sat in the market.
+
+**Files:**
+- Modify: `src/betfair.py` (also return `place_bsp`), `tests/test_betfair.py`
+- Regenerate: `data/market/cup_bsp.csv` (adds a `place_bsp` column)
+- Create: `src/strategies.py`, `tests/test_strategies.py`
+- Create: `docs/strategy_report.md` (generated, committed)
+
+**Acceptance Criteria:**
+- [ ] `load_cup_bsp` returns columns `year,horse_number,horse_name,bsp,place_bsp`; `data/market/cup_bsp.csv` has a `place_bsp` column with no blanks for 2020-2025 and the 2025 row for horse 14 has `place_bsp` of about 3.79.
+- [ ] Every strategy stakes exactly $100 per Cup (`test_every_strategy_stakes_exactly_100`).
+- [ ] A bookmaker payout is lower than the exchange payout for the same bet on the same result; a losing bet returns 0; a trifecta box pays only if all of 1st-3rd are in the box.
+- [ ] `build_frame` raises `ValueError` naming any runner without market prices; `strategy_bets` raises for fields under 17 runners.
+- [ ] `python -m src.strategies` writes `docs/strategy_report.md` containing both scenarios, the winners' market ranks, and the placegetter-rank buckets; the report says six Cups is not evidence of an edge.
+
+**Verify:** `python -m pytest tests/test_betfair.py tests/test_strategies.py -v && python -m src.strategies` → all PASS; report printed with `favourite win $100` ROI of -100.0 in both scenarios (the favourite lost all six Cups) and `longshot spread $10 x ranks 8-17` at -9.3 (exchange) / -19.5 (bookmaker)
+
+**Steps:**
+
+- [ ] **Step 1: Extend the loader and its tests for `place_bsp`**
+
+In `src/betfair.py`: add `"PLACE_BSP"` to `USECOLS`; in `load_cup_bsp` rename it with the others (`"PLACE_BSP": "place_bsp"`), return `["year", "horse_number", "horse_name", "bsp", "place_bsp"]`, and keep `dropna(subset=["bsp"])`.
+
+In `tests/test_betfair.py`: add `"PLACE_BSP"` to `COLS`, make `row(...)` append a place price (default `2.0`) as the last element, and change the column assertion in `test_load_cup_bsp_filters_to_the_cup` to `["year", "horse_number", "horse_name", "bsp", "place_bsp"]`. In `test_attach_bsp_*` nothing changes (`attach_bsp` still merges `bsp` only).
+
+Run: `python -m pytest tests/test_betfair.py -v` → all PASS.
+
+- [ ] **Step 2: Regenerate the market file**
+
+Run: `python scripts/fetch_cup_bsp.py` (raw files are cached in `data/raw/betfair`, so it only re-reads them). Then:
+
+```bash
+python - <<'EOF'
+import pandas as pd
+b = pd.read_csv("data/market/cup_bsp.csv")
+print(b.columns.tolist(), b["place_bsp"].isna().sum())
+print(b[(b.year == 2025) & (b.horse_number == 14)])
+EOF
+```
+
+Expected: columns `['year', 'horse_number', 'horse_name', 'bsp', 'place_bsp']`, `0` blanks, and `place_bsp` about 3.79 for Half Yours.
+
+- [ ] **Step 3: Write the failing tests** `tests/test_strategies.py`
+
+```python
+import numpy as np
+import pandas as pd
+import pytest
+
+from src import strategies
+from src.strategies import SCENARIOS, build_frame, placegetter_ranks, settle, strategy_bets
+
+
+def make_year(order, n=20, year=2025):
+    """Field of n runners ranked by price (rank 0 = favourite). `order` = ranks of 1st, 2nd, 3rd."""
+    pos = {r: i + 1 for i, r in enumerate(order)}
+    rest = iter(range(4, n + 1))
+    positions = [pos[r] if r in pos else next(rest) for r in range(n)]
+    return pd.DataFrame({
+        "year": year, "horse_number": np.arange(1, n + 1), "horse_name": [f"H{r}" for r in range(n)],
+        "finishing_position": positions,
+        "bsp": 3.0 + 3.0 * np.arange(n), "place_bsp": 1.5 + 0.5 * np.arange(n),
+    })
+
+
+def fair_win_price(g, rank, m):
+    inv = 1 / g["bsp"]
+    return 1 / (inv.iloc[rank] / inv.sum() * m)
+
+
+def test_favourite_win_pays_normalised_price_when_it_wins():
+    g = make_year([0, 5, 9])
+    sc = SCENARIOS["exchange"]
+    staked, returned = settle([("win", (0,), 100.0)], g, sc)
+    assert staked == 100.0
+    assert returned == pytest.approx(100.0 * fair_win_price(g, 0, sc["win_m"]))
+
+
+def test_losing_favourite_returns_nothing():
+    g = make_year([4, 5, 9])
+    assert settle([("win", (0,), 100.0)], g, SCENARIOS["exchange"])[1] == 0.0
+
+
+def test_place_bet_pays_when_runner_finishes_top_three():
+    g = make_year([7, 0, 9])
+    assert settle([("place", (0,), 100.0)], g, SCENARIOS["exchange"])[1] > 100.0 * 0.5
+    g2 = make_year([7, 8, 9])
+    assert settle([("place", (0,), 100.0)], g2, SCENARIOS["exchange"])[1] == 0.0
+
+
+def test_bookmaker_margin_lowers_every_payout():
+    g = make_year([0, 1, 2])
+    for bets in ([("win", (0,), 100.0)], [("place", (0,), 100.0)], [("tri", (0, 1, 2, 3), 100.0)]):
+        assert settle(bets, g, SCENARIOS["bookmaker"])[1] < settle(bets, g, SCENARIOS["exchange"])[1]
+
+
+@pytest.mark.parametrize("n", [17, 20, 24])
+def test_every_strategy_stakes_exactly_100(n):
+    g = make_year([0, 1, 2], n=n)
+    for name, bets in strategy_bets(n).items():
+        staked, _ = settle(bets, g, SCENARIOS["exchange"])
+        assert staked == pytest.approx(100.0), name
+
+
+def test_trifecta_box_pays_only_when_all_three_finishers_are_in_the_box():
+    g = make_year([1, 3, 2])
+    sc = SCENARIOS["exchange"]
+    hit = settle([("tri", (0, 1, 2, 3), 120.0)], g, sc)[1]
+    assert hit > 0
+    inv = 1 / g["bsp"]
+    pw = (inv / inv.sum()).to_numpy()
+    p = pw[1] * pw[3] / (1 - pw[1]) * pw[2] / (1 - pw[1] - pw[3])
+    assert hit == pytest.approx(120.0 / 24 * (1 - sc["takeout"]) / p)
+    assert settle([("tri", (0, 1, 2), 120.0)], g, sc)[1] == 0.0   # rank 3 is missing from the box
+
+
+def test_field_smaller_than_17_raises():
+    with pytest.raises(ValueError, match="at least 17"):
+        strategy_bets(16)
+
+
+def test_unknown_bet_kind_raises():
+    with pytest.raises(ValueError, match="unknown bet kind"):
+        settle([("exacta", (0, 1), 10.0)], make_year([0, 1, 2]), SCENARIOS["exchange"])
+
+
+def test_build_frame_raises_on_runner_without_prices():
+    g = make_year([0, 1, 2])
+    market = g[["year", "horse_number", "bsp", "place_bsp"]].iloc[:-1]
+    with pytest.raises(ValueError, match="2025 #20"):
+        build_frame(g[["year", "horse_number", "horse_name", "finishing_position"]], market)
+
+
+def test_placegetter_ranks_reports_market_rank_of_top_three():
+    out = placegetter_ranks(make_year([4, 0, 9]))
+    assert out["market_rank"].tolist() == [5, 1, 10]
+```
+
+Run: `python -m pytest tests/test_strategies.py -v` → ERROR `ModuleNotFoundError: No module named 'src.strategies'`
+
+- [ ] **Step 4: Write the implementation** `src/strategies.py`
+
+```python
+"""Replay betting strategies on past Melbourne Cups using market-derived prices.
+
+Runners are addressed by market rank (0 = favourite, by Betfair BSP). Prices come from
+the race-normalised BSP with a margin applied, so the exchange and bookmaker scenarios
+show what the same bets would have returned at different price qualities.
+"""
+
+import glob
+import os
+import sys
+from typing import Dict, List, Tuple
+
+import numpy as np
+import pandas as pd
+
+if __package__ in (None, ""):
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# win_m / place_m divide the fair price; takeout is the tote's cut of the trifecta pool.
+SCENARIOS = {
+    "exchange": {"win_m": 1.02, "place_m": 1.02, "takeout": 0.10},
+    "bookmaker": {"win_m": 1.15, "place_m": 1.25, "takeout": 0.25},
+}
+
+Bet = Tuple[str, Tuple[int, ...], float]   # (kind, market ranks, stake); kind: win | place | tri
+
+
+def build_frame(results: pd.DataFrame, market: pd.DataFrame) -> pd.DataFrame:
+    """Join verified results to BSP / place BSP; every runner of a market year must match."""
+    frame = results[results["year"].isin(market["year"])].merge(
+        market[["year", "horse_number", "bsp", "place_bsp"]],
+        on=["year", "horse_number"], how="left")
+    missing = frame[frame["bsp"].isna() | frame["place_bsp"].isna()]
+    if not missing.empty:
+        names = ", ".join(f"{r.year} #{r.horse_number}" for r in missing.itertuples())
+        raise ValueError(f"no market prices for: {names}")
+    return frame
+
+
+def load_frame() -> pd.DataFrame:
+    results = pd.concat(
+        [pd.read_csv(p) for p in sorted(glob.glob("data/verified/melbourne_cup_*.csv"))],
+        ignore_index=True)
+    return build_frame(results, pd.read_csv("data/market/cup_bsp.csv"))
+
+
+def strategy_bets(n_runners: int) -> Dict[str, List[Bet]]:
+    """Every strategy stakes exactly $100. Names use 1-based market ranks."""
+    if n_runners < 17:
+        raise ValueError("strategies need a field of at least 17 runners")
+    long_ranks = range(7, 17)
+    return {
+        "favourite win $100": [("win", (0,), 100.0)],
+        "favourite place $100": [("place", (0,), 100.0)],
+        "longshot spread $10 x ranks 8-17": [("win", (i,), 10.0) for i in long_ranks],
+        "trifecta box ranks 1-5": [("tri", tuple(range(0, 5)), 100.0)],
+        "trifecta box ranks 4-9": [("tri", tuple(range(3, 9)), 100.0)],
+        "mixed: $40 longshots, $30 place 4-6, $30 tri 2-6":
+            [("win", (i,), 4.0) for i in long_ranks]
+            + [("place", (i,), 10.0) for i in (3, 4, 5)]
+            + [("tri", tuple(range(1, 6)), 30.0)],
+    }
+
+
+def _prices(g: pd.DataFrame, sc: Dict[str, float]):
+    pw = ((1 / g["bsp"]) / (1 / g["bsp"]).sum()).to_numpy()
+    pp = (3 * (1 / g["place_bsp"]) / (1 / g["place_bsp"]).sum()).to_numpy()
+    win_price = 1 / (pw * sc["win_m"])
+    place_price = np.maximum(1 / (pp * sc["place_m"]), 1.0)
+    return pw, win_price, place_price
+
+
+def settle(bets: List[Bet], year_df: pd.DataFrame, sc: Dict[str, float]) -> Tuple[float, float]:
+    """Return (staked, returned) for one Cup. Trifecta dividends are simulated:
+    (1 - takeout) / P(1-2-3) under the market's Plackett-Luce probabilities."""
+    g = year_df.sort_values("bsp", kind="stable").reset_index(drop=True)
+    pw, win_price, place_price = _prices(g, sc)
+    pos = g["finishing_position"].to_numpy(dtype=float)
+    first, second, third = np.argsort(pos, kind="stable")[:3]
+    staked = returned = 0.0
+    for kind, ranks, stake in bets:
+        staked += stake
+        if kind == "win":
+            if pos[ranks[0]] == 1:
+                returned += stake * win_price[ranks[0]]
+        elif kind == "place":
+            if pos[ranks[0]] <= 3:
+                returned += stake * place_price[ranks[0]]
+        elif kind == "tri":
+            k = len(ranks)
+            unit = stake / (k * (k - 1) * (k - 2))
+            if {first, second, third} <= set(ranks):
+                p = pw[first] * pw[second] / (1 - pw[first]) * pw[third] / (1 - pw[first] - pw[second])
+                returned += unit * (1 - sc["takeout"]) / p
+        else:
+            raise ValueError(f"unknown bet kind: {kind}")
+    return staked, returned
+
+
+def backtest(frame: pd.DataFrame) -> pd.DataFrame:
+    rows = []
+    for scenario, sc in SCENARIOS.items():
+        for year, g in frame.groupby("year"):
+            for name, bets in strategy_bets(len(g)).items():
+                staked, returned = settle(bets, g, sc)
+                rows.append({"scenario": scenario, "year": int(year), "strategy": name,
+                             "staked": staked, "returned": returned})
+    return pd.DataFrame(rows)
+
+
+def summarise(table: pd.DataFrame) -> pd.DataFrame:
+    out = table.groupby(["scenario", "strategy"], sort=False).agg(
+        staked=("staked", "sum"), returned=("returned", "sum"),
+        years_paid=("returned", lambda s: int((s > 0).sum())), cups=("year", "count"),
+        best_year=("returned", "max"), worst_year=("returned", "min")).reset_index()
+    out["roi_pct"] = (out["returned"] / out["staked"] - 1) * 100
+    return out.round(1)
+
+
+def placegetter_ranks(frame: pd.DataFrame) -> pd.DataFrame:
+    """Top-3 finishers with their pre-race market rank (1 = favourite)."""
+    f = frame.copy()
+    f["market_rank"] = f.groupby("year")["bsp"].rank(method="first").astype(int)
+    return f[f["finishing_position"] <= 3].sort_values(["year", "finishing_position"])[
+        ["year", "finishing_position", "horse_name", "bsp", "market_rank"]]
+
+
+def build_report(frame: pd.DataFrame) -> str:
+    table = backtest(frame)
+    summary = summarise(table)
+    years = sorted(frame["year"].unique())
+    placed = placegetter_ranks(frame)
+    buckets = [(1, 3), (4, 6), (7, 10), (11, 16), (17, 24)]
+    bucket_lines = [f"  market ranks {lo}-{hi}: {int(placed['market_rank'].between(lo, hi).sum())}"
+                    for lo, hi in buckets]
+    winners = sorted(placed[placed["finishing_position"] == 1]["market_rank"].tolist())
+    parts = [
+        f"Melbourne Cup strategy replay, {len(years)} Cups {years[0]}-{years[-1]}, $100 per Cup per strategy",
+        "Prices: race-normalised Betfair BSP with a margin. Trifecta dividends are simulated from the",
+        "market's Plackett-Luce probabilities (real tote dividends are not in the data).",
+        "Six Cups is a tiny sample: results show what a shape of bet looks like, not an edge.",
+        "",
+        f"Winners' market ranks (1 = favourite): {winners}",
+        "Top-3 finishers by market rank bucket (18 in total):",
+        *bucket_lines,
+    ]
+    for scenario, sc in SCENARIOS.items():
+        parts += ["", f"== {scenario} {sc}"]
+        parts.append(summary[summary["scenario"] == scenario].drop(columns="scenario").to_string(index=False))
+        piv = table[table["scenario"] == scenario].pivot(index="strategy", columns="year", values="returned").round(0)
+        parts += ["Return per Cup ($):", piv.to_string()]
+    return "\n".join(parts)
+
+
+def main() -> None:
+    report = build_report(load_frame())
+    print(report)
+    os.makedirs("docs", exist_ok=True)
+    with open("docs/strategy_report.md", "w") as fh:
+        fh.write("```\n" + report + "\n```\n")
+
+
+if __name__ == "__main__":
+    main()
+```
+
+- [ ] **Step 5: Run the tests**
+
+Run: `python -m pytest tests/test_strategies.py -v` → 12 passed
+
+- [ ] **Step 6: Generate the report and commit**
+
+Run: `python -m src.strategies`
+Expected: both scenarios printed; winners' market ranks `[4, 4, 7, 9, 11, 23]`; `favourite win $100` ROI -100.0 in both; `longshot spread $10 x ranks 8-17` -9.3 (exchange) and -19.5 (bookmaker).
+
+```bash
+git add src/betfair.py tests/test_betfair.py src/strategies.py tests/test_strategies.py docs/strategy_report.md
+git add -f data/market/cup_bsp.csv
+git commit -m "feat: replay betting strategies on past Cups"
+```
+
+---
+
 ## Follow-up plans (out of scope here, from the alternatives doc)
 
 - **Step 4:** train on all ANZ races of 2000m+ from the Betfair monthly/yearly CSVs; hold the Cups out as the test set. Needs its own plan (data volume, form features, joins).
