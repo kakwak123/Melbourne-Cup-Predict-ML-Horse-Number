@@ -4,11 +4,11 @@ import pytest
 from src.betfair import attach_bsp, load_cup_bsp
 
 COLS = ["LOCAL_MEETING_DATE", "TRACK", "RACE_NO", "WIN_MARKET_NAME", "DISTANCE",
-        "TAB_NUMBER", "SELECTION_NAME", "WIN_BSP"]
+        "TAB_NUMBER", "SELECTION_NAME", "WIN_BSP", "PLACE_BSP"]
 
 
-def row(date, track, dist, num, name, bsp, market="R7 3200m Grp1"):
-    return [date, track, 7, market, dist, num, name, bsp]
+def row(date, track, dist, num, name, bsp, market="R7 3200m Grp1", place_bsp=2.0):
+    return [date, track, 7, market, dist, num, name, bsp, place_bsp]
 
 
 @pytest.fixture
@@ -27,7 +27,7 @@ def betfair_csv(tmp_path):
 
 def test_load_cup_bsp_filters_to_the_cup(betfair_csv):
     out = load_cup_bsp([betfair_csv])
-    assert list(out.columns) == ["year", "horse_number", "horse_name", "bsp"]
+    assert list(out.columns) == ["year", "horse_number", "horse_name", "bsp", "place_bsp"]
     assert set(out["horse_number"]) == {14, 1}
     assert set(out["year"]) == {2025}
 

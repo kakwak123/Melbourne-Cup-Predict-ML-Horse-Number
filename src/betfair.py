@@ -5,7 +5,7 @@ from typing import Iterable, Optional
 import pandas as pd
 
 USECOLS = ["LOCAL_MEETING_DATE", "TRACK", "WIN_MARKET_NAME", "DISTANCE",
-           "TAB_NUMBER", "SELECTION_NAME", "WIN_BSP"]
+           "TAB_NUMBER", "SELECTION_NAME", "WIN_BSP", "PLACE_BSP"]
 
 
 def load_cup_bsp(paths: Iterable, expected_years: Optional[Iterable[int]] = None) -> pd.DataFrame:
@@ -30,8 +30,8 @@ def load_cup_bsp(paths: Iterable, expected_years: Optional[Iterable[int]] = None
     if (dates > 1).any():
         raise ValueError(f"more than one candidate Cup date in years {list(dates[dates > 1].index)}")
     out = cup.rename(columns={"TAB_NUMBER": "horse_number", "SELECTION_NAME": "horse_name",
-                              "WIN_BSP": "bsp"})
-    out = out[["year", "horse_number", "horse_name", "bsp"]].dropna(subset=["bsp"])
+                              "WIN_BSP": "bsp", "PLACE_BSP": "place_bsp"})
+    out = out[["year", "horse_number", "horse_name", "bsp", "place_bsp"]].dropna(subset=["bsp"])
     out["horse_number"] = out["horse_number"].astype(int)
     return out.sort_values(["year", "horse_number"]).reset_index(drop=True)
 
