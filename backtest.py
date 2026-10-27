@@ -12,7 +12,7 @@ import pandas as pd
 from sklearn.linear_model import LogisticRegression
 
 def load() -> pd.DataFrame:
-    files = sorted(glob.glob("data/historical/*.csv") + glob.glob("data/backtest/*.csv"))
+    files = sorted(glob.glob("data/historical/*.csv") + glob.glob("data/verified/*.csv"))
     df = pd.concat([pd.read_csv(f) for f in files], ignore_index=True)
     df = df[["year", "horse_name", "barrier", "weight", "finishing_position"]].dropna()
     df["top3"] = (df["finishing_position"] <= 3).astype(int)
