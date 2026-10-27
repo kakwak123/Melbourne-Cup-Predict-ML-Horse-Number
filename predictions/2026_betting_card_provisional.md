@@ -43,3 +43,21 @@ Backtest: returned $179 / $0 / $147 / $29 / $0 / $30 over the six Cups. Paid som
 2. Drop scratched horses and put their stake on the next rank down (a scratching after the draw isn't replaced).
 3. Place bets before 3:00pm AEDT. No top-ups after the race: the $100 is the whole budget.
 4. A frozen model prediction (`freeze-2026-cup` tag) will be added after the draw; it uses market-only probabilities, so it will agree with the price ranking above.
+
+## Card C: the $1,000 shot (all or nothing)
+
+To return at least $1,000 on a win bet you need stake x price >= $1,000. The chance of a horse winning is about 1/price less the bookmaker margin, so every dollar staked buys the same sliver of that chance (about 1/1,150 per dollar at a 15% margin). With $100 the ceiling is roughly an 8-9% chance of a $1,000+ return and about a 91% chance of losing the $100. How the $100 is split only changes how many horses you cheer for. Longshots are usually over-bet, so the true chance may be lower.
+
+Backtest context (2020-2025): one winner in six was at $51 or longer (Knight's Choice 2024, Betfair $268), so a $1,000 return would have happened once in six Cups for a spread like this. In-sample, six races, no edge.
+
+| Horse | Price now | Stake | Pays if it wins |
+|---|---|---|---|
+| Strictly Business | $201 | $5 | $1,005 |
+| Asterix (NZ) | $101 | $10 | $1,010 |
+| Onesmoothoperator (USA) | $101 | $10 | $1,010 |
+| Royal Supremacy (IRE) | $101 | $10 | $1,010 |
+| Knight's Choice | $51 | $20 | $1,020 |
+| Soul Of Spain (IRE) | $51 | $20 | $1,020 |
+| Wine Dark Sea (GB) | $51 | $20 | $1,020 |
+
+Total staked $95; keep $5 as a buffer. Rule after the draw: for each horse stake = $1,000 divided by its current price, rounded up; if a price shortens, top up from the buffer; if a horse is scratched or does not make the field, move its stake to the next longest price. Horses at $101 and longer may not make the final 24, so check the field first. Expected loss is similar to Card A in dollars (about $15-$45 of the $100); the difference is that this card loses almost every time and pays big when it does.
