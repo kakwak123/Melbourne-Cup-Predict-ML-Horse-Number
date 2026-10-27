@@ -1,4 +1,4 @@
-"""
+"""LEGACY: superseded by src/plackett_luce.py + src/evaluate.py (see README). Kept for reference only.
 Simplified model training module using Logistic Regression for Melbourne Cup predictions.
 
 This module implements:

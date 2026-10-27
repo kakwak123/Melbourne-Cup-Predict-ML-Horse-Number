@@ -1,16 +1,27 @@
-# Melbourne Cup Top-3 Prediction System
+# Melbourne Cup Top-3 Prediction
 
-An AI-powered system that predicts the top 3 finishing horses for the Melbourne Cup using machine learning models (XGBoost regression and LSTM neural networks).
+Predicts each runner's chance of finishing in the top three of the Melbourne Cup.
 
-## Features
+## Current pipeline
 
-- **Data Pipeline**: Automated data collection, cleaning, and preprocessing from public sources
-- **Dual Model Architecture**: 
-  - XGBoost regression for finishing position prediction
-  - LSTM neural network for capturing temporal patterns in horse performance
-- **Ensemble Prediction**: Combines both models for improved accuracy
-- **Evaluation Metrics**: MAE, RMSE, and top-3 ranking accuracy
-- **CLI Interface**: Simple command-line tool for predictions
+- **Data:** `data/verified/` holds Wikipedia-checked results (barrier, weight, finishing order). `data/market/cup_bsp.csv` holds Betfair Starting Prices for the Cups since 2020. The old `data/historical/` CSVs are kept only for the comparison in `docs/verification_report.md`.
+- **Model:** a regularised Plackett-Luce (conditional logit) fitted on the first three finishers of each race, with exact top-3 probabilities.
+- **Benchmark:** the Betfair market's normalised implied probabilities.
+- **Evaluation:** leave-one-year-out, per-race log loss, race-level bootstrap. `docs/evaluation_report.md` gives the verdict: on the 2020-2025 market years the combined model did not beat the market (top-3 log loss +0.380 nats, 95% CI includes 0), and the Cup favourite did not win any of those six Cups. With this few races the honest claim is "competitive with the market", not "beats the market".
+- **Frozen predictions:** `predictions/` holds predictions committed and tagged before a race.
+
+### Commands
+
+    python -m pytest                              # all tests
+    python scripts/fetch_cup_bsp.py               # download Cup BSP from Betfair
+    python scripts/compare_historical.py          # check verified files, compare with old CSVs
+    python -m src.evaluate                        # leave-one-year-out report
+    python -m src.predict_cup data/processed/2026_lineup_provisional.csv
+    python -m src.strategies                      # replay bet shapes on past Cups (docs/strategy_report.md)
+
+## Legacy (do not use for decisions)
+
+`src/train_models.py`, `src/predict.py`, `src/advanced_models.py`, `src/predict_advanced.py` and `src/cli.py` are the original XGBoost / LSTM / logistic pipeline. They were trained on partly synthetic data, scored finishing position instead of each race's field, and were tuned toward the 2025 result. The 2025 top-3 hit rate was 0 of 3. They are kept for reference only.
 
 ## Project Structure
 
@@ -33,18 +44,21 @@ melbourne-cup-predict/
 ## Installation
 
 1. Clone the repository:
+
 ```bash
 git clone <repository-url>
 cd Melbourne-Cup-Predict-ML-Horse-Number
 ```
 
 2. Create a virtual environment:
+
 ```bash
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 ```
 
 3. Install dependencies:
+
 ```bash
 pip install -r requirements.txt
 ```
@@ -54,16 +68,19 @@ pip install -r requirements.txt
 ### Quick Start
 
 1. **Install dependencies:**
+
 ```bash
 pip install -r requirements.txt
 ```
 
 2. **Train models** (uses mock historical data if none provided):
+
 ```bash
 python src/train_models.py
 ```
 
 3. **Make predictions:**
+
 ```bash
 python src/cli.py --year 2024
 ```
@@ -77,6 +94,7 @@ python src/train_models.py
 ```
 
 This will:
+
 - Load and preprocess historical data
 - Train XGBoost regression model with hyperparameter tuning
 - Train LSTM neural network for temporal patterns
@@ -99,6 +117,7 @@ python src/cli.py
 ### Command-Line Options
 
 **CLI Options (`src/cli.py`):**
+
 - `--year`: Year of Melbourne Cup (default: current year)
 - `--input`: Path to input data file (CSV/JSON format)
 - `--output`: Path to save results CSV (default: results.csv)
@@ -107,6 +126,7 @@ python src/cli.py
 - `--verbose`: Display full predictions table
 
 **Prediction Script (`src/predict.py`):**
+
 - `--input`: Path to input data file
 - `--year`: Year of Melbourne Cup
 - `--output`: Path to save results CSV
@@ -156,26 +176,6 @@ Horse Number | Horse Name     | Predicted Probability (Top 3)
 
 Results are also saved to `results.csv` by default.
 
-## Model Details
-
-### XGBoost Regression Model
-- Predicts finishing position as a continuous value (1-24)
-- Uses feature importance analysis
-- Hyperparameter tuning via GridSearchCV
-- Default ensemble weight: 0.6
-
-### LSTM Neural Network
-- Captures temporal trends from historical performance
-- Handles variable-length sequences with padding
-- Architecture: Masking → LSTM(64) → LSTM(32) → Dense(16) → Dense(1)
-- Sequence length: 5 races per horse
-- Default ensemble weight: 0.4
-
-### Ensemble Approach
-- Combines predictions from both models using weighted average
-- Converts finishing positions to top-3 probabilities using softmax transformation
-- Sorts horses by probability descending
-
 ## Code Structure
 
 - `src/data_fetch.py`: Data collection, cleaning, and preprocessing
@@ -196,4 +196,3 @@ This project is for educational purposes.
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
-

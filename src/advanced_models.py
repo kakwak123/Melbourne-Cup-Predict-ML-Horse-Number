@@ -1,4 +1,4 @@
-"""
+"""LEGACY: superseded by src/plackett_luce.py + src/evaluate.py (see README). Kept for reference only.
 Advanced ML Models for Melbourne Cup Prediction
 Experiments with different algorithms to optimize for 2025 winners pattern
 """

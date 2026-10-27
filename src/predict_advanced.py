@@ -1,4 +1,4 @@
-"""
+"""LEGACY: superseded by src/plackett_luce.py + src/evaluate.py (see README). Kept for reference only.
 Prediction script using advanced ML models
 """
 

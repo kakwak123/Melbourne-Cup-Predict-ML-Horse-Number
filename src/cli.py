@@ -1,4 +1,4 @@
-"""
+"""LEGACY: superseded by src/plackett_luce.py + src/evaluate.py (see README). Kept for reference only.
 CLI interface for Melbourne Cup predictions.
 
 Provides a command-line interface to display top-3 predictions
