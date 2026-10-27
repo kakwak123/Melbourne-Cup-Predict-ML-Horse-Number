@@ -8,7 +8,7 @@ Predicts each runner's chance of finishing in the top three of the Melbourne Cup
 - **Model:** a regularised Plackett-Luce (conditional logit) fitted on the first three finishers of each race, with exact top-3 probabilities.
 - **Benchmark:** the Betfair market's normalised implied probabilities.
 - **Evaluation:** leave-one-year-out, per-race log loss, race-level bootstrap. `docs/evaluation_report.md` gives the verdict: on the 2020-2025 market years the combined model did not beat the market (top-3 log loss +0.380 nats, 95% CI includes 0), and the Cup favourite did not win any of those six Cups. With this few races the honest claim is "competitive with the market", not "beats the market".
-- **Frozen predictions:** `predictions/` holds predictions committed and tagged before a race.
+- **Frozen predictions:** `predictions/` holds predictions committed and tagged before a race (the folder is created when the first prediction is frozen).
 
 ### Commands
 
@@ -21,7 +21,11 @@ Predicts each runner's chance of finishing in the top three of the Melbourne Cup
 
 ## Legacy (do not use for decisions)
 
-`src/train_models.py`, `src/predict.py`, `src/advanced_models.py`, `src/predict_advanced.py` and `src/cli.py` are the original XGBoost / LSTM / logistic pipeline. They were trained on partly synthetic data, scored finishing position instead of each race's field, and were tuned toward the 2025 result. The 2025 top-3 hit rate was 0 of 3. They are kept for reference only.
+`src/train_models.py`, `src/predict.py`, `src/advanced_models.py`, `src/predict_advanced.py` and `src/cli.py` are the original XGBoost / LSTM / logistic pipeline. They were trained on partly synthetic data, scored finishing position instead of each race's field, and were tuned toward the 2025 result. The legacy model ranked the 2025 winner, Half Yours, 14th (see `analyze_failure.py`), and its held-out top-3 accuracy was 0.0 (`models/evaluation_results.json`). They are kept for reference only.
+
+## Legacy pipeline reference
+
+Everything below describes the legacy pipeline (mock data, XGBoost/LSTM, MAE/RMSE) and is not used for current predictions. Use the commands in "Current pipeline" above.
 
 ## Project Structure
 
