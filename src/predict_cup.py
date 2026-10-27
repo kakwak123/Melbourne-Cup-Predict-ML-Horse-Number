@@ -35,6 +35,12 @@ def _check_lineup(lineup: pd.DataFrame) -> None:
 
 
 def predict_lineup(lineup: pd.DataFrame, train: pd.DataFrame) -> pd.DataFrame:
+    """lineup needs horse_number, horse_name, barrier, weight and odds.
+
+    `odds` are decimal win odds from the bookmaker you will bet with; the combined
+    model's market feature was trained on Betfair BSP, so treat the output as
+    odds-implied, not an independent forecast.
+    """
     _check_lineup(lineup)
     model = choose_model(train)
     market_p = implied_probs(lineup["odds"].astype(float).values)

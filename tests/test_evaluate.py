@@ -22,16 +22,27 @@ def synthetic(years=range(2015, 2026), n=10, market_from=2020, seed=0):
 
 def test_logo_never_trains_on_the_held_out_year(monkeypatch):
     df = synthetic()
+    cols = ["w_z", "b_z"]
+    arrays = evaluate._race_arrays(df, cols)
+    all_years = set(arrays)
     seen = []
     real_fit = evaluate.fit
 
     def spy(races, l2=1.0):
-        seen.append(len(races))
+        years = {
+            y for y, (X, pos) in arrays.items()
+            if any(np.array_equal(X, rX) and np.array_equal(pos, rpos) for rX, rpos in races)
+        }
+        seen.append(years)
         return real_fit(races, l2=l2)
 
     monkeypatch.setattr(evaluate, "fit", spy)
-    evaluate.logo_pl(df, ["w_z", "b_z"])
-    assert set(seen) == {df["year"].nunique() - 1}
+    evaluate.logo_pl(df, cols)
+    assert len(seen) == len(all_years)
+    for years in seen:
+        assert len(years) == len(all_years) - 1
+    missing = [next(iter(all_years - years)) for years in seen]
+    assert sorted(missing) == sorted(all_years)
 
 
 def test_incomplete_market_year_is_excluded():

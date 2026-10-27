@@ -7,7 +7,7 @@ Predicts each runner's chance of finishing in the top three of the Melbourne Cup
 - **Data:** `data/verified/` holds Wikipedia-checked results (barrier, weight, finishing order). `data/market/cup_bsp.csv` holds Betfair Starting Prices for the Cups since 2020. The old `data/historical/` CSVs are kept only for the comparison in `docs/verification_report.md`.
 - **Model:** a regularised Plackett-Luce (conditional logit) fitted on the first three finishers of each race, with exact top-3 probabilities.
 - **Benchmark:** the Betfair market's normalised implied probabilities.
-- **Evaluation:** leave-one-year-out, per-race log loss, race-level bootstrap. `docs/evaluation_report.md` gives the verdict: on the 2020-2025 market years the combined model did not beat the market (top-3 log loss +0.380 nats, 95% CI includes 0), and the Cup favourite did not win any of those six Cups. With this few races the honest claim is "competitive with the market", not "beats the market".
+- **Evaluation:** leave-one-year-out, per-race log loss, race-level bootstrap. `docs/evaluation_report.md` gives the verdict: on the 2020-2025 market years the combined model did not beat the market (top-3 log loss +0.380 nats, 95% CI includes 0), and nothing, including the market, could be told apart from uniform guessing over those six Cups (see the winner and top-3 log loss columns; market 3.365 vs uniform 3.135 winner, 9.295 vs 9.270 top-3). The fixed rule therefore uses market-only probabilities, so predictions carry no information beyond the odds supplied. Nothing here shows a betting edge.
 - **Frozen predictions:** `predictions/` holds predictions committed and tagged before a race (the folder is created when the first prediction is frozen).
 
 ### Commands
@@ -18,6 +18,8 @@ Predicts each runner's chance of finishing in the top three of the Melbourne Cup
     python -m src.evaluate                        # leave-one-year-out report
     python -m src.predict_cup data/processed/2026_lineup_provisional.csv
     python -m src.strategies                      # replay bet shapes on past Cups (docs/strategy_report.md)
+
+Run all commands from the repository root. `data/processed/` is gitignored, so the lineup CSV is a local file; its `odds` column must hold decimal win odds from the bookmaker you will bet with (the model's market features were trained on Betfair BSP).
 
 ## Legacy (do not use for decisions)
 

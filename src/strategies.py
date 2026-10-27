@@ -139,6 +139,7 @@ def build_report(frame: pd.DataFrame) -> str:
         "Prices: race-normalised Betfair BSP with a margin. Trifecta dividends are simulated from the",
         "market's Plackett-Luce probabilities (real tote dividends are not in the data).",
         "Six Cups is a tiny sample: results show what a shape of bet looks like, not an edge.",
+        "The bet shapes were chosen after prototyping on these same six Cups, so every ROI below is in-sample (chosen with hindsight), not a forecast.",
         "",
         f"Winners' market ranks (1 = favourite): {winners}",
         "Top-3 finishers by market rank bucket (18 in total):",

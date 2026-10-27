@@ -3,6 +3,7 @@ Melbourne Cup strategy replay, 6 Cups 2020-2025, $100 per Cup per strategy
 Prices: race-normalised Betfair BSP with a margin. Trifecta dividends are simulated from the
 market's Plackett-Luce probabilities (real tote dividends are not in the data).
 Six Cups is a tiny sample: results show what a shape of bet looks like, not an edge.
+The bet shapes were chosen after prototyping on these same six Cups, so every ROI below is in-sample (chosen with hindsight), not a forecast.
 
 Winners' market ranks (1 = favourite): [4, 4, 7, 9, 11, 23]
 Top-3 finishers by market rank bucket (18 in total):

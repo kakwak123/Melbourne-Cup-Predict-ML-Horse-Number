@@ -22,13 +22,20 @@ and the numbered placings fill 1..n-1. Reproduce the counts with `python scripts
 | 2021 | yes | 9 | finishing positions differ |
 | 2022 | yes | 12 | 11 barriers differ; 1 runner missing from old CSV |
 | 2023 | yes | 85 | barriers, names, weights and positions broadly differ; 1 runner only in old CSV |
-| 2024 | yes | no old CSV | from `data/backtest` |
-| 2025 | yes | no old CSV | from `data/backtest` |
+| 2024 | yes | no old CSV | from Wikipedia (earlier `data/backtest`, moved to `data/verified`); barriers and weights not re-checked a second time; numbers and names cross-checked against Betfair TAB numbers and selection names |
+| 2025 | yes | no old CSV | from Wikipedia (earlier `data/backtest`, moved to `data/verified`); barriers and weights not re-checked a second time; numbers and names cross-checked against Betfair TAB numbers and selection names |
 
 ## Dropped years
 
 - 2016: Wikipedia's results table has no barrier column.
 - 2018: Wikipedia's field table has no weight column.
+
+## Notes
+
+- DNF/FF runners were given last place in 2010, 2015, 2020, 2022 and 2023.
+- 2019's "II PARADISO" is Wikipedia's spelling of Il Paradiso (the join is by horse number).
+- 2023 has four spelling typos versus Betfair (SOULCOME, OKITA SOUSHU, VIRTOUS CIRCLE, MORE FELLONS) that do not affect the join.
+- Only 2012, 2019 and 2022 were spot-checked against Wikipedia by a reviewer.
 
 ## Conclusion
 
