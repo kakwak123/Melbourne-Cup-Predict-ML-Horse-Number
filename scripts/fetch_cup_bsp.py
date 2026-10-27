@@ -34,7 +34,7 @@ def fetch_november(year: int) -> str:
 
 def main() -> None:
     paths = [fetch_november(y) for y in YEARS]
-    cup = load_cup_bsp(paths)
+    cup = load_cup_bsp(paths, expected_years=YEARS)
     os.makedirs("data/market", exist_ok=True)
     cup.to_csv("data/market/cup_bsp.csv", index=False)
     print(cup.groupby("year").size().to_string())

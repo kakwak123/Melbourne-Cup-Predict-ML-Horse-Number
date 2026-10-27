@@ -1,6 +1,6 @@
 """Extract Melbourne Cup runners and Betfair Starting Price from Betfair's free ANZ CSVs."""
 
-from typing import Iterable
+from typing import Iterable, Optional
 
 import pandas as pd
 
@@ -8,7 +8,7 @@ USECOLS = ["LOCAL_MEETING_DATE", "TRACK", "WIN_MARKET_NAME", "DISTANCE",
            "TAB_NUMBER", "SELECTION_NAME", "WIN_BSP"]
 
 
-def load_cup_bsp(paths: Iterable) -> pd.DataFrame:
+def load_cup_bsp(paths: Iterable, expected_years: Optional[Iterable[int]] = None) -> pd.DataFrame:
     """Flemington, 3200m, November, Group 1 -> one row per runner per year."""
     frames = []
     for path in paths:
@@ -22,6 +22,10 @@ def load_cup_bsp(paths: Iterable) -> pd.DataFrame:
         frames.append(df[mask])
     cup = pd.concat(frames, ignore_index=True)
     cup["year"] = cup["LOCAL_MEETING_DATE"].dt.year
+    if expected_years is not None:
+        missing = sorted(set(expected_years) - set(cup["year"]))
+        if missing:
+            raise ValueError(f"no Cup rows found for years {missing}")
     dates = cup.groupby("year")["LOCAL_MEETING_DATE"].nunique()
     if (dates > 1).any():
         raise ValueError(f"more than one candidate Cup date in years {list(dates[dates > 1].index)}")

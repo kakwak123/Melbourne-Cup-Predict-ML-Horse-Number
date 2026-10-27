@@ -57,3 +57,13 @@ def test_attach_bsp_raises_on_unmatched():
                         "horse_name": ["Half Yours"], "bsp": [10.18]})
     with pytest.raises(ValueError, match="GHOST"):
         attach_bsp(results, bsp)
+
+
+def test_load_cup_bsp_raises_when_expected_year_missing(betfair_csv):
+    with pytest.raises(ValueError, match="no Cup rows"):
+        load_cup_bsp([betfair_csv], expected_years=[2025, 2024])
+
+
+def test_load_cup_bsp_accepts_present_expected_year(betfair_csv):
+    out = load_cup_bsp([betfair_csv], expected_years=[2025])
+    assert set(out["year"]) == {2025}
